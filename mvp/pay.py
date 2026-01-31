@@ -1,8 +1,104 @@
 from web3 import Web3
 import os
 import requests
+import json
+from datetime import datetime, timedelta
 
 LITE_API = "https://pusdc-kite-testnet.zentra.dev"
+
+# 限额配置
+LIMITS = {
+    "single_transaction": 1000,  # 单笔限额（USDT）
+    "daily": 5000,               # 日限额
+    "monthly": 50000             # 月限额
+}
+
+# 交易记录存储文件
+TRANSACTION_RECORD_FILE = "transaction_records.json"
+
+# 白名单配置
+WHITELIST = {
+    "receivers": ["0x742d35Cc6634C0532925a3b844Bc454e4438f44e", "0x376d3737Da2A540318BbA02A98f03a97d1DD8f6d"],
+    "time_windows": ["00:00-23:59"]  # 24小时允许交易
+}
+
+def load_transaction_records():
+    """
+    加载交易记录
+    """
+    if os.path.exists(TRANSACTION_RECORD_FILE):
+        try:
+            with open(TRANSACTION_RECORD_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_transaction_record(agent_address, amount, timestamp):
+    """
+    保存交易记录
+    """
+    records = load_transaction_records()
+    if agent_address not in records:
+        records[agent_address] = []
+    records[agent_address].append({
+        "amount": amount,
+        "timestamp": timestamp
+    })
+    with open(TRANSACTION_RECORD_FILE, 'w', encoding='utf-8') as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
+
+def check_limits(agent_address, amount):
+    """
+    检查交易限额
+    """
+    # 1. 检查单笔限额
+    if amount > LIMITS["single_transaction"]:
+        print(f"❌ 超出单笔限额 {LIMITS['single_transaction']} USDT")
+        return False
+    
+    # 2. 检查日限额
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start_timestamp = int(today_start.timestamp())
+    
+    records = load_transaction_records()
+    daily_amount = 0
+    monthly_amount = 0
+    
+    if agent_address in records:
+        for record in records[agent_address]:
+            record_time = datetime.fromtimestamp(record["timestamp"])
+            # 计算日累计
+            if record["timestamp"] >= today_start_timestamp:
+                daily_amount += record["amount"]
+            # 计算月累计
+            if (now.year == record_time.year and 
+                now.month == record_time.month):
+                monthly_amount += record["amount"]
+    
+    # 检查日限额
+    if daily_amount + amount > LIMITS["daily"]:
+        print(f"❌ 超出日限额 {LIMITS['daily']} USDT")
+        print(f"今日已使用: {daily_amount} USDT, 本次尝试: {amount} USDT")
+        return False
+    
+    # 检查月限额
+    if monthly_amount + amount > LIMITS["monthly"]:
+        print(f"❌ 超出月限额 {LIMITS['monthly']} USDT")
+        print(f"本月已使用: {monthly_amount} USDT, 本次尝试: {amount} USDT")
+        return False
+    
+    return True
+
+def check_whitelist(to_addr):
+    """
+    检查接收方是否在白名单中
+    """
+    if WHITELIST["receivers"] and to_addr not in WHITELIST["receivers"]:
+        print(f"❌ 接收地址不在白名单中: {to_addr}")
+        return False
+    return True
 
 # KiteAI Testnet Settings
 RPC_URL = "https://rpc-testnet.gokite.ai/"
@@ -94,6 +190,16 @@ def pay(name, amount_human=1.0):
         return
     to_addr = w3.to_checksum_address(to_addr_raw)
 
+    # 2. 检查限额
+    print("🔍 Checking transaction limits...")
+    if not check_limits(account_addr, amount_human):
+        return
+    
+    # 3. 检查白名单
+    print("🔍 Checking whitelist...")
+    if not check_whitelist(to_addr):
+        return
+
     lite_contract = w3.eth.contract(address=w3.to_checksum_address(LITE_ADDR), abi=LITE_ABI)
     
     # Convert amount to internal representation (assuming 6 decimals for USDT)
@@ -178,6 +284,10 @@ def pay(name, amount_human=1.0):
         
         if receipt.status == 1:
             print("✅ Transaction successful!")
+            # 保存交易记录
+            timestamp = int(datetime.now().timestamp())
+            save_transaction_record(account_addr, amount_human, timestamp)
+            print(f"📝 Transaction record saved: {amount_human} USDT to {to_addr}")
         else:
             print("❌ Transaction failed (status 0)")
 
