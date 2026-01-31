@@ -11,6 +11,13 @@ CHAIN_ID = 2368
 LITE_ADDR = '0x35A9b4E215c8Bf9b7bFF83Ac08aD32dEE8D19F64'
 USDT_ADDR = "0x0fF5393387ad2f9f691FD6Fd28e07E3969e27e63"
 
+# Address book for recipients
+address_book = {
+    "target": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",  # Example address
+    "alice": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",   # Example
+    "bob": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"      # Example
+}
+
 # ERC20 Minimal ABI
 ERC20_ABI = [
     {"constant": True, "inputs": [{"name": "_owner", "type": "address"}], "name": "balanceOf", "outputs": [{"name": "balance", "type": "uint256"}], "type": "function"},
@@ -143,7 +150,7 @@ def pay(name, amount_human=1.0):
         signed_tx = w3.eth.account.sign_transaction(transaction, private_key)
         
         print("📡 Sending transaction to network...")
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
         
         print(f"⌛ Transaction sent! Hash: {tx_hash.hex()}")
         print("Waiting for confirmation...")
