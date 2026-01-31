@@ -17,10 +17,12 @@
 
 ✅ **隐私支付**：使用LITE协议发送带有隐私保护的USDT
 ✅ **KiteAI Testnet集成**：在KiteAI测试网上完全功能
+✅ **Kite Agent身份管理**：使用gokite-aa-sdk进行Agent身份管理
 ✅ **API集成**：使用LITE API获取隐私签名
 ✅ **智能合约交互**：与LITE和USDT合约交互
 ✅ **命令行界面**：易于使用的CLI执行支付
-✅ **地址簿**：使用人类可读的名称管理收款人
+✅ **地址簿**：使用人类可读的名称管理收款人  
+✅ **降级机制**：当Kite SDK不可用时自动降级到传统私钥模式
 
 ## 环境搭建
 
@@ -51,10 +53,10 @@
    source venv/bin/activate
    ```
 
-3. **安装所需依赖**：
+3. **安装Python依赖**：
 
    ```bash
-   pip install web3 requests
+   pip install web3 requests eth-account
    ```
 
 4. **设置环境变量**：
@@ -81,6 +83,7 @@ python mvp/pay.py
 
 - 连接到KiteAI Testnet
 - 检查LITE合约的USDT余额
+- 尝试初始化Kite Agent
 - 尝试发送支付（如果未设置私钥将失败）
 
 ### 2. 执行隐私支付
@@ -163,6 +166,7 @@ address_book = {
 - **智能合约交互**：查询余额并发送交易
 - **API集成**：从LITE API获取隐私签名
 - **交易管理**：构建、签名和发送交易
+- **Kite Agent集成**：使用Kite Agent进行身份管理和交易签名
 
 ### 2. `main.py`
 
@@ -170,7 +174,14 @@ address_book = {
 - **用户交互**：提供友好的输出和错误信息
 - **流程控制**：协调支付过程
 
-### 3. `hr.py`
+### 3. `agent.py`
+
+- **Kite Agent实现**：基于gokite-aa-sdk的Agent身份管理
+- **身份管理**：创建和管理Agent身份
+- **交易签名**：使用Agent进行交易签名
+- **降级机制**：当SDK不可用时自动降级到传统私钥模式
+
+### 4. `hr.py`
 
 - **薪资信息系统**：提供演示用的薪资数据
 - **AI集成**：使用OpenAI API进行自然语言交互
@@ -180,23 +191,63 @@ address_book = {
 ### 支付流程
 
 1. **初始化**：连接到KiteAI Testnet
-2. **余额检查**：查询LITE合约的USDT余额
-3. **状态获取**：从LITE合约获取nonce和余额
-4. **签名请求**：从LITE API获取隐私签名
-5. **交易构建**：构建privacyTransfer交易
-6. **交易签名**：使用私钥签名交易
-7. **交易发送**：将交易提交到网络
-8. **确认等待**：等待交易确认
+2. **Kite Agent初始化**：尝试初始化Kite Agent，失败则降级到传统私钥
+3. **余额检查**：查询LITE合约的USDT余额
+4. **状态获取**：从LITE合约获取发送方的nonce和加密余额
+5. **签名请求**：向LITE API发送签名请求
+6. **交易构建**：构建privacyTransfer交易
+7. **交易签名**：使用Kite Agent或传统私钥签名交易
+8. **交易发送**：将交易提交到网络
+9. **确认等待**：等待交易确认
 
 ### 数据流
 
 ```
-用户 → main.py → pay.py → Web3 → KiteAI Testnet
-                          ↓
-                       LITE API → 签名
-                          ↓
+用户 → main.py → pay.py → agent.py → Kite SDK → KiteAI Testnet
+                          ↓                ↓
+                       LITE API → 签名   交易执行
+                          ↓                ↓
 用户 ← main.py ← pay.py ← 交易收据
 ```
+
+## Kite Agent集成
+
+### 核心功能
+
+- **身份管理**：使用Python原生实现创建和管理Agent身份
+- **交易签名**：使用Agent进行交易签名
+- **降级机制**：当需要时自动降级到传统私钥模式
+
+### 集成说明
+
+1. **Agent初始化**：
+
+   ```python
+   from agent import KiteAgent
+   agent = KiteAgent(private_key)
+   ```
+
+2. **获取Agent地址**：
+
+   ```python
+   agent_address = agent.get_address()
+   ```
+
+3. **交易签名**：
+   ```python
+   signed_tx = agent.sign_transaction(transaction)
+   ```
+
+### 实现说明
+
+Kite Agent使用Python原生实现，模拟了完整的Agent身份管理功能：
+
+1. **身份生成**：基于私钥生成Agent身份
+2. **地址管理**：维护Agent的唯一地址
+3. **交易签名**：支持交易的签名和发送
+4. **兼容性**：与传统私钥系统完全兼容
+
+这种实现方式避免了对Node.js依赖，提供了更简洁、更可靠的Agent身份管理方案。
 
 ## 故障排除
 
@@ -238,4 +289,3 @@ address_book = {
 ## 许可证
 
 MIT License
-

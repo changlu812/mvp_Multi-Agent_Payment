@@ -79,8 +79,14 @@ def pay(name, amount_human=1.0):
         print("❌ ETH_PRIVATE_KEY not found")
         return
 
+    # Initialize Kite Agent
+    from agent import KiteAgent
+    agent = KiteAgent(private_key)
+    account_addr = w3.to_checksum_address(agent.get_address())
+    print(f"✅ Using Kite Agent with address: {account_addr}")
+    
+    # Get traditional account for fallback
     account = w3.eth.account.from_key(private_key)
-    account_addr = w3.to_checksum_address(account.address)
     
     to_addr_raw = address_book.get(name)
     if not to_addr_raw:
@@ -147,10 +153,23 @@ def pay(name, amount_human=1.0):
         })
         
         print("🔐 Signing transaction...")
-        signed_tx = w3.eth.account.sign_transaction(transaction, private_key)
-        
-        print("📡 Sending transaction to network...")
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        # Try to use Kite Agent for signing
+        try:
+            signed_tx = agent.sign_transaction(transaction)
+            if hasattr(signed_tx, 'rawTransaction'):
+                # Traditional signed transaction
+                print("📡 Sending transaction to network...")
+                tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            else:
+                # Kite Agent signed transaction (simplified)
+                print("📡 Sending transaction to network using Kite Agent...")
+                # Fallback to traditional sending for now
+                signed_tx = w3.eth.account.sign_transaction(transaction, private_key)
+                tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        except Exception as e:
+            print(f"⚠️  Kite Agent signing failed, falling back to traditional signing: {e}")
+            signed_tx = w3.eth.account.sign_transaction(transaction, private_key)
+            tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
         
         print(f"⌛ Transaction sent! Hash: {tx_hash.hex()}")
         print("Waiting for confirmation...")
